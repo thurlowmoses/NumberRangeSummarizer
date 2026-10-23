@@ -21,6 +21,18 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/**
+ * These tests are grouped the same way the solution was actually built:
+ * <ol>
+ *   <li>collect() on its own, since parsing is a separate concern to grouping;</li>
+ *   <li>summarizeCollection() on its own, including the brief's own example and
+ *       the edge cases (unsorted input, duplicates, negatives, int overflow);</li>
+ *   <li>the injected {@link RangeFormatter}, to prove the formatting can be swapped
+ *       out without changing the grouping logic;</li>
+ *   <li>one end-to-end test that runs collect() then summarizeCollection() together,
+ *       since the brief is ultimately used that way.</li>
+ * </ol>
+ */
 class NumberRangeSummarizerImplTest {
 
     private NumberRangeSummarizer summarizer;

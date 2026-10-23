@@ -30,6 +30,23 @@ import java.util.stream.Collectors;
  * out is handed off to a {@link RangeFormatter}, so the output format can be changed
  * without touching this class. It doesn't keep any state between calls, so it's safe
  * to share one instance.
+ *
+ * <p>How this came together, roughly in order:
+ * <ol>
+ *   <li>Started from the brief's own example and wrote that as a failing test first,
+ *       against a stub that just threw. Once that failed for the right reason (not a
+ *       typo), there was something real to build towards.</li>
+ *   <li>{@code collect()} is the easy half: split, trim, drop blanks, parse. It's a
+ *       straight pipeline, which is why it reads well as a stream.</li>
+ *   <li>{@code summarizeCollection()} is the actual problem: you can't tell what's
+ *       "consecutive" in an unordered bag of numbers, so sorting (and dropping
+ *       duplicates) comes first. After that it's one pass with two pointers:
+ *       where the current run started, and the last number seen.</li>
+ *   <li>Once the grouping worked, the only opinion left in the method was how a
+ *       range gets printed. That's a different concern to grouping, and the brief
+ *       could change it without changing the algorithm — so it was pulled out into
+ *       {@link RangeFormatter} and injected rather than hard-coded.</li>
+ * </ol>
  */
 public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
 
@@ -88,6 +105,9 @@ public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
             return "";
         }
 
+        // rangeStart is where the run we're currently building began.
+        // previous is the last number we looked at, so we can tell if the next
+        // one carries the run on or breaks it.
         List<String> parts = new ArrayList<>();
         int rangeStart = numbers.get(0);
         int previous = rangeStart;
@@ -102,7 +122,9 @@ public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
             previous = current;
         }
 
-        // Nothing comes after the last run to break it, so it has to be added here.
+        // The loop only closes a run when it sees a break, and there's no break
+        // after the last number - the loop just ends. So the final run has to be
+        // closed off here, or it would silently go missing from the output.
         parts.add(formatter.format(rangeStart, previous));
 
         return String.join(OUTPUT_SEPARATOR, parts);
@@ -122,7 +144,12 @@ public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
 
     /**
      * Checks if {@code current} comes straight after {@code previous}.
-     * The maths is done as a {@code long} so it can't overflow at {@code Integer.MAX_VALUE}.
+     *
+     * <p>The subtraction is done as a {@code long}, not an {@code int}. If
+     * {@code previous} is {@code Integer.MAX_VALUE} and {@code current} is
+     * {@code Integer.MIN_VALUE}, int arithmetic would wrap the result around
+     * to {@code 1} and wrongly call them consecutive. Doing the maths as a
+     * {@code long} first avoids that wraparound.
      */
     private static boolean isNextNumber(int previous, int current) {
         return (long) current - previous == 1;
