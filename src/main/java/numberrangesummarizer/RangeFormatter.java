@@ -1,14 +1,13 @@
 package numberrangesummarizer;
 
 /**
- * Strategy for writing one run of consecutive numbers as text.
+ * Decides how a single run of numbers is written out.
  *
- * <p>The summarizer decides <em>which</em> numbers belong together; a
- * {@code RangeFormatter} decides <em>how</em> a run is written. Keeping the two apart
- * means the output format can change without touching the grouping algorithm.
+ * <p>The summarizer works out which numbers belong together, and a formatter
+ * decides what that looks like as text. Keeping them separate means you can
+ * change the output style without touching the grouping logic.
  *
- * <p>This is a functional interface (exactly one abstract method), so a lambda can be
- * used as a formatter:
+ * <p>There's only one method, so you can pass in a lambda as well:
  * <pre>{@code
  * RangeFormatter brackets = (start, end) -> "[" + start + ".." + end + "]";
  * }</pre>
@@ -17,11 +16,11 @@ package numberrangesummarizer;
 public interface RangeFormatter {
 
     /**
-     * Formats one run of consecutive numbers.
+     * Writes one run of numbers as text.
      *
-     * @param start the first number of the run
-     * @param end   the last number of the run; equal to {@code start} for a single number
-     * @return the text for that run
+     * @param start the first number in the run
+     * @param end   the last number in the run (the same as {@code start} if it's just one number)
+     * @return the text for the run
      */
     String format(int start, int end);
 }

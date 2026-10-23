@@ -19,7 +19,7 @@ class DefaultRangeFormatterTest {
         assertEquals("6-8", formatter.format(6, 8));
     }
 
-    // Assumption: two consecutive numbers already count as a range.
+    // Two numbers in a row already count as a range.
     @Test
     void format_treatsTwoConsecutiveNumbersAsARange() {
         assertEquals("1-2", formatter.format(1, 2));

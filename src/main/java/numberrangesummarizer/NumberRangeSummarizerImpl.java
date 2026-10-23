@@ -9,27 +9,27 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
- * Turns a comma separated string of integers into a summary where runs of
- * consecutive numbers are written as ranges.
+ * Takes a list of numbers and squashes any runs of consecutive numbers into ranges.
  *
- * <p>Example: {@code "1,3,6,7,8,12,13,14,15,21,22,23,24,31"} is summarized as
+ * <p>For example, {@code "1,3,6,7,8,12,13,14,15,21,22,23,24,31"} becomes
  * {@code "1, 3, 6-8, 12-15, 21-24, 31"}.
  *
- * <p>Assumptions (each one is covered by a unit test):
+ * <p>The brief didn't say what to do in a few situations, so I made these choices
+ * (there's a test for each one):
  * <ul>
- *   <li>Input does not need to be sorted; numbers are sorted before grouping.</li>
- *   <li>Duplicates are ignored: {@code 1,1,2} gives {@code "1-2"}.</li>
- *   <li>Two consecutive numbers already form a range: {@code 1,2} gives {@code "1-2"}.</li>
- *   <li>Null or blank input gives an empty result, never an exception.</li>
- *   <li>Whitespace around numbers and empty entries ({@code "1,,2"}) are ignored.</li>
- *   <li>A value that is not a whole {@code int} is rejected with an exception naming it.</li>
- *   <li>The caller's collection is never modified.</li>
+ *   <li>The numbers can come in any order. I sort them first.</li>
+ *   <li>Duplicates are ignored, so {@code 1,1,2} gives {@code "1-2"}.</li>
+ *   <li>Two numbers in a row already count as a range, so {@code 1,2} gives {@code "1-2"}.</li>
+ *   <li>Null or blank input just gives an empty result instead of crashing.</li>
+ *   <li>Extra spaces and empty entries like {@code "1,,2"} are skipped.</li>
+ *   <li>Anything that isn't a whole number throws an error that says which value was wrong.</li>
+ *   <li>The collection you pass in is never changed.</li>
  * </ul>
  *
- * <p>Design: this class owns the algorithm (parse, sort, group, join). How each run is
- * written is delegated to an injected {@link RangeFormatter} (composition over
- * inheritance), so the output format can change without editing this class.
- * The class has no mutable state, so one instance can safely be shared between threads.
+ * <p>This class handles the logic (parse, sort, group, join). How each range is written
+ * out is handed off to a {@link RangeFormatter}, so the output format can be changed
+ * without touching this class. It doesn't keep any state between calls, so it's safe
+ * to share one instance.
  */
 public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
 
@@ -38,15 +38,15 @@ public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
 
     private final RangeFormatter formatter;
 
-    /** Creates a summarizer that writes ranges in the default {@code "6-8"} format. */
+    /** Uses the normal format, e.g. {@code "6-8"}. */
     public NumberRangeSummarizerImpl() {
         this(new DefaultRangeFormatter());
     }
 
     /**
-     * Creates a summarizer with a custom output format (constructor injection).
+     * Lets the caller choose how ranges are written.
      *
-     * @param formatter decides how each run of numbers is written
+     * @param formatter writes out each range
      * @throws NullPointerException if {@code formatter} is null
      */
     public NumberRangeSummarizerImpl(RangeFormatter formatter) {
@@ -54,32 +54,32 @@ public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
     }
 
     /**
-     * Parses a comma separated string into integers, keeping their order and duplicates.
+     * Reads a comma separated string and turns it into a list of numbers.
+     * The order and any duplicates are kept as they are.
      *
-     * @param input e.g. {@code "1, 3,6"}; may be null or blank
-     * @return the parsed numbers, or an empty collection for null or blank input
-     * @throws IllegalArgumentException if a value is not a valid {@code int}
+     * @param input something like {@code "1, 3,6"}; can be null or blank
+     * @return the numbers, or an empty list if there was nothing to read
+     * @throws IllegalArgumentException if one of the values isn't a valid {@code int}
      */
     @Override
     public Collection<Integer> collect(String input) {
-        // Return an empty list rather than null, so callers never need a null check.
+        // Nothing to read, so hand back an empty list rather than null.
         if (input == null || input.trim().isEmpty()) {
             return Collections.emptyList();
         }
 
         return Arrays.stream(input.split(INPUT_SEPARATOR))
-                .map(String::trim)                              // " 3 " -> "3"
-                .filter(token -> !token.isEmpty())              // "1,,2" -> skip the empty entry
-                .map(NumberRangeSummarizerImpl::parseInteger)   // "3" -> 3, or a clear error
+                .map(String::trim)                              // " 3 " becomes "3"
+                .filter(token -> !token.isEmpty())              // skip the gap in "1,,2"
+                .map(NumberRangeSummarizerImpl::parseInteger)   // "3" becomes 3
                 .collect(Collectors.toList());
     }
 
     /**
-     * Summarizes the numbers as a comma delimited string, grouping consecutive
-     * numbers into ranges such as {@code "6-8"}.
+     * Builds the summary string, e.g. {@code "1, 3, 6-8"}.
      *
-     * @param input the numbers to summarize, in any order; may be null or contain nulls
-     * @return e.g. {@code "1, 3, 6-8"}, or an empty string if there is nothing to summarize
+     * @param input the numbers in any order; can be null or contain nulls
+     * @return the summary, or an empty string if there were no numbers
      */
     @Override
     public String summarizeCollection(Collection<Integer> input) {
@@ -95,34 +95,34 @@ public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
         for (int i = 1; i < numbers.size(); i++) {
             int current = numbers.get(i);
             if (!isNextNumber(previous, current)) {
-                // Gap found: the run that started at rangeStart is finished.
+                // The run has been broken, so save it and start a new one here.
                 parts.add(formatter.format(rangeStart, previous));
                 rangeStart = current;
             }
             previous = current;
         }
 
-        // The loop only closes a run when it meets a gap, so the last run must be added here.
+        // Nothing comes after the last run to break it, so it has to be added here.
         parts.add(formatter.format(rangeStart, previous));
 
         return String.join(OUTPUT_SEPARATOR, parts);
     }
 
-    /** Returns the non-null values, without duplicates and in ascending order, as a new list. */
+    /** Drops nulls and duplicates and sorts what's left, without touching the original. */
     private static List<Integer> sortedUniqueNumbers(Collection<Integer> input) {
         if (input == null) {
             return Collections.emptyList();
         }
         return input.stream()
-                .filter(Objects::nonNull)   // a null cannot be turned into an int
-                .distinct()                 // 1,1,2 behaves like 1,2
-                .sorted()                   // consecutive numbers must sit next to each other
+                .filter(Objects::nonNull)   // a null can't be turned into an int
+                .distinct()                 // treat 1,1,2 the same as 1,2
+                .sorted()                   // neighbours need to sit next to each other
                 .collect(Collectors.toList());
     }
 
     /**
-     * True when {@code current} is exactly one more than {@code previous}.
-     * Done in {@code long} so {@code Integer.MAX_VALUE + 1} cannot overflow.
+     * Checks if {@code current} comes straight after {@code previous}.
+     * The maths is done as a {@code long} so it can't overflow at {@code Integer.MAX_VALUE}.
      */
     private static boolean isNextNumber(int previous, int current) {
         return (long) current - previous == 1;
@@ -132,7 +132,7 @@ public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
         try {
             return Integer.valueOf(token);
         } catch (NumberFormatException e) {
-            // Name the bad value and keep the original exception as the cause.
+            // Say which value was bad, and keep the original error attached.
             throw new IllegalArgumentException("Not a valid integer: '" + token + "'", e);
         }
     }
