@@ -25,13 +25,13 @@ class NumberRangeSummarizerImplTest {
 
     private NumberRangeSummarizer summarizer;
 
-    // Runs before every test, so each test gets a fresh object and tests cannot affect each other.
+    // A fresh summarizer for every test, so no test can affect another.
     @BeforeEach
     void setUp() {
         summarizer = new NumberRangeSummarizerImpl();
     }
 
-    // ------------------------------------------------------------------ collect
+    // --- collect() ---
 
     @Test
     void collect_parsesCommaSeparatedNumbersInOrder() {
@@ -45,7 +45,7 @@ class NumberRangeSummarizerImplTest {
         assertEquals(Arrays.asList(1, 2, 3), summarizer.collect("  1 ,2,   3 "));
     }
 
-    // Assumption: null or blank input is "nothing to parse", not an error.
+    // Null or blank input just means there's nothing to read, so it shouldn't blow up.
     @ParameterizedTest
     @NullAndEmptySource
     @ValueSource(strings = {"   ", "\t"})
@@ -53,13 +53,13 @@ class NumberRangeSummarizerImplTest {
         assertTrue(summarizer.collect(input).isEmpty());
     }
 
-    // Assumption: empty entries such as "1,,2," are harmless formatting noise and are skipped.
+    // A stray comma like in "1,,2," is probably just a typo, so skip it.
     @Test
     void collect_ignoresEmptyEntries() {
         assertEquals(Arrays.asList(1, 2), summarizer.collect("1,,2,"));
     }
 
-    // collect only parses; sorting and removing duplicates is summarizeCollection's job.
+    // collect() only reads the numbers. Sorting and removing duplicates happens later.
     @Test
     void collect_keepsDuplicatesAndOrder() {
         assertEquals(Arrays.asList(5, 1, 5), summarizer.collect("5,1,5"));
@@ -70,8 +70,8 @@ class NumberRangeSummarizerImplTest {
         assertEquals(Arrays.asList(-3, -2, 4), summarizer.collect("-3,-2,4"));
     }
 
-    // Assumption: anything that is not a whole int is rejected (letters, decimals,
-    // a different separator, and a value just above Integer.MAX_VALUE).
+    // Anything that isn't a whole int should be rejected: letters, decimals,
+    // the wrong separator, and a number one bigger than Integer.MAX_VALUE.
     @ParameterizedTest
     @ValueSource(strings = {"1,abc,3", "1.5", "1;2", "2147483648"})
     void collect_throwsForValuesThatAreNotValidIntegers(String input) {
@@ -86,7 +86,7 @@ class NumberRangeSummarizerImplTest {
         assertTrue(e.getMessage().contains("abc"));
     }
 
-    // ------------------------------------------------------------ summarize
+    // --- summarizeCollection() ---
 
     @Test
     void summarize_matchesTheExampleFromTheBrief() {
@@ -95,8 +95,7 @@ class NumberRangeSummarizerImplTest {
         assertEquals("1, 3, 6-8, 12-15, 21-24, 31", summarizer.summarizeCollection(input));
     }
 
-    // One assertion, many rows: like [Theory] + [MemberData] in xUnit.
-    // Each row's input and expected result show up in the test report.
+    // The same check run against lots of inputs. Each row shows up on its own in the report.
     @ParameterizedTest(name = "{0} -> \"{1}\"")
     @MethodSource("summarizeCases")
     void summarize_groupsConsecutiveNumbersIntoRanges(List<Integer> input, String expected) {
@@ -105,21 +104,21 @@ class NumberRangeSummarizerImplTest {
 
     static Stream<Arguments> summarizeCases() {
         return Stream.of(
-                arguments(Arrays.asList(5), "5"),                         // single number, not "5-5"
-                arguments(Arrays.asList(1, 2), "1-2"),                    // assumption: two numbers form a range
-                arguments(Arrays.asList(1, 2, 3, 4, 5), "1-5"),           // all consecutive: last run is added
-                arguments(Arrays.asList(2, 4, 6, 8), "2, 4, 6, 8"),       // none consecutive
-                arguments(Arrays.asList(1, 2, 4, 5, 7), "1-2, 4-5, 7"),   // mixed
-                arguments(Arrays.asList(9, 7, 8, 1), "1, 7-9"),           // assumption: input may be unsorted
-                arguments(Arrays.asList(1, 1, 2, 2, 3), "1-3"),           // assumption: duplicates are ignored
-                arguments(Arrays.asList(-2, -1, 0, 1), "-2-1"),           // negatives
+                arguments(Arrays.asList(5), "5"),                         // one number, not "5-5"
+                arguments(Arrays.asList(1, 2), "1-2"),                    // two in a row is a range
+                arguments(Arrays.asList(1, 2, 3, 4, 5), "1-5"),           // the whole list is one run
+                arguments(Arrays.asList(2, 4, 6, 8), "2, 4, 6, 8"),       // no runs at all
+                arguments(Arrays.asList(1, 2, 4, 5, 7), "1-2, 4-5, 7"),   // a mix of both
+                arguments(Arrays.asList(9, 7, 8, 1), "1, 7-9"),           // out of order
+                arguments(Arrays.asList(1, 1, 2, 2, 3), "1-3"),           // duplicates
+                arguments(Arrays.asList(-2, -1, 0, 1), "-2-1"),           // negative numbers
                 arguments(Arrays.asList(Integer.MAX_VALUE - 1, Integer.MAX_VALUE),
-                        "2147483646-2147483647"),                         // top of the int range
+                        "2147483646-2147483647"),                         // the biggest ints
                 arguments(Arrays.asList(Integer.MAX_VALUE, Integer.MIN_VALUE),
-                        "-2147483648, 2147483647"));                      // no overflow: MAX+1 is not MIN
+                        "-2147483648, 2147483647"));                      // MAX + 1 wraps to MIN, but they aren't neighbours
     }
 
-    // Assumption: null or empty input is "nothing to summarize", not an error.
+    // No numbers means an empty summary, not a crash.
     @Test
     void summarize_returnsEmptyStringForNullInput() {
         assertEquals("", summarizer.summarizeCollection(null));
@@ -130,13 +129,13 @@ class NumberRangeSummarizerImplTest {
         assertEquals("", summarizer.summarizeCollection(Collections.<Integer>emptyList()));
     }
 
-    // Assumption: null elements are skipped (a null cannot be turned into an int).
+    // Nulls inside the list are skipped, since they can't be turned into numbers.
     @Test
     void summarize_ignoresNullElements() {
         assertEquals("1-2, 5", summarizer.summarizeCollection(Arrays.asList(1, null, 2, null, 5)));
     }
 
-    // The interface accepts any Collection, and a HashSet has no guaranteed order.
+    // The interface takes any Collection, and a HashSet doesn't keep things in order.
     @Test
     void summarize_acceptsAnyCollectionNotJustLists() {
         Collection<Integer> set = new HashSet<>(Arrays.asList(4, 2, 3, 9));
@@ -144,7 +143,7 @@ class NumberRangeSummarizerImplTest {
         assertEquals("2-4, 9", summarizer.summarizeCollection(set));
     }
 
-    // Assumption: the caller's collection is never changed (we sort a copy, not the original).
+    // We sort a copy, so the list that was passed in should come back untouched.
     @Test
     void summarize_doesNotModifyTheCallersCollection() {
         List<Integer> input = new ArrayList<>(Arrays.asList(3, 1, 2, 2));
@@ -154,7 +153,7 @@ class NumberRangeSummarizerImplTest {
         assertEquals(Arrays.asList(3, 1, 2, 2), input);
     }
 
-    // ---------------------------------------------------------- design (OOP)
+    // --- custom formatter ---
 
     @Test
     void constructor_rejectsANullFormatter() {
@@ -163,14 +162,14 @@ class NumberRangeSummarizerImplTest {
 
     @Test
     void summarize_usesTheInjectedFormatter() {
-        // A lambda is enough here because RangeFormatter has a single abstract method.
+        // RangeFormatter only has one method, so a lambda works fine here.
         RangeFormatter brackets = (start, end) -> "[" + start + ".." + end + "]";
         NumberRangeSummarizer custom = new NumberRangeSummarizerImpl(brackets);
 
         assertEquals("[1..3], [7..7]", custom.summarizeCollection(Arrays.asList(1, 2, 3, 7)));
     }
 
-    // ----------------------------------------------------------- end to end
+    // --- both methods together ---
 
     @Test
     void collectThenSummarize_worksTogether() {
