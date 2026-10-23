@@ -154,6 +154,22 @@ class NumberRangeSummarizerImplTest {
         assertEquals(Arrays.asList(3, 1, 2, 2), input);
     }
 
+    // ---------------------------------------------------------- design (OOP)
+
+    @Test
+    void constructor_rejectsANullFormatter() {
+        assertThrows(NullPointerException.class, () -> new NumberRangeSummarizerImpl(null));
+    }
+
+    @Test
+    void summarize_usesTheInjectedFormatter() {
+        // A lambda is enough here because RangeFormatter has a single abstract method.
+        RangeFormatter brackets = (start, end) -> "[" + start + ".." + end + "]";
+        NumberRangeSummarizer custom = new NumberRangeSummarizerImpl(brackets);
+
+        assertEquals("[1..3], [7..7]", custom.summarizeCollection(Arrays.asList(1, 2, 3, 7)));
+    }
+
     // ----------------------------------------------------------- end to end
 
     @Test

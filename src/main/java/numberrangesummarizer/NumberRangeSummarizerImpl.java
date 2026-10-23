@@ -26,13 +26,32 @@ import java.util.stream.Collectors;
  *   <li>The caller's collection is never modified.</li>
  * </ul>
  *
- * <p>The class has no mutable state, so one instance can safely be shared between threads.
+ * <p>Design: this class owns the algorithm (parse, sort, group, join). How each run is
+ * written is delegated to an injected {@link RangeFormatter} (composition over
+ * inheritance), so the output format can change without editing this class.
+ * The class has no mutable state, so one instance can safely be shared between threads.
  */
 public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
 
     private static final String INPUT_SEPARATOR = ",";
     private static final String OUTPUT_SEPARATOR = ", ";
-    private static final String RANGE_SEPARATOR = "-";
+
+    private final RangeFormatter formatter;
+
+    /** Creates a summarizer that writes ranges in the default {@code "6-8"} format. */
+    public NumberRangeSummarizerImpl() {
+        this(new DefaultRangeFormatter());
+    }
+
+    /**
+     * Creates a summarizer with a custom output format (constructor injection).
+     *
+     * @param formatter decides how each run of numbers is written
+     * @throws NullPointerException if {@code formatter} is null
+     */
+    public NumberRangeSummarizerImpl(RangeFormatter formatter) {
+        this.formatter = Objects.requireNonNull(formatter, "formatter must not be null");
+    }
 
     /**
      * Parses a comma separated string into integers, keeping their order and duplicates.
@@ -77,14 +96,14 @@ public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
             int current = numbers.get(i);
             if (!isNextNumber(previous, current)) {
                 // Gap found: the run that started at rangeStart is finished.
-                parts.add(formatRange(rangeStart, previous));
+                parts.add(formatter.format(rangeStart, previous));
                 rangeStart = current;
             }
             previous = current;
         }
 
         // The loop only closes a run when it meets a gap, so the last run must be added here.
-        parts.add(formatRange(rangeStart, previous));
+        parts.add(formatter.format(rangeStart, previous));
 
         return String.join(OUTPUT_SEPARATOR, parts);
     }
@@ -107,11 +126,6 @@ public class NumberRangeSummarizerImpl implements NumberRangeSummarizer {
      */
     private static boolean isNextNumber(int previous, int current) {
         return (long) current - previous == 1;
-    }
-
-    /** Writes a run as {@code "31"} for a single number or {@code "6-8"} for a range. */
-    private static String formatRange(int start, int end) {
-        return start == end ? String.valueOf(start) : start + RANGE_SEPARATOR + end;
     }
 
     private static Integer parseInteger(String token) {
