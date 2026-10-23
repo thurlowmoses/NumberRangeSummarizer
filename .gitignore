@@ -8,3 +8,6 @@ target/
 .classpath
 .project
 .settings/
+
+# A JDK runtime the Java extension left behind inside the source tree; not part of the solution.
+src/main/java/numberrangesummarizer/oracleJdk-27/
